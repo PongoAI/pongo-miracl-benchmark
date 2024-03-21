@@ -21,27 +21,22 @@ pc.create_index(index_name, dimension=3072, metric="euclidean", spec=ServerlessS
     region="us-west-2"
   ) )
 
-
 pinecone_index = pc.Index(index_name)
-
-
 
 vector_store = PineconeVectorStore(pinecone_index=pinecone_index)
 
 nodes = []
 
-for data in miracl['dev']:  # or 'dev', 'testA'
+for data in miracl['dev']:  
     query_id = data['query_id']
     passages = []
     passages.extend(data['positive_passages'])
     passages.extend(data['negative_passages'])
 
-    for passage in passages: # OR 'negative_passages'
+    for passage in passages: 
         docid = passage['docid']
         title = passage['title']
         data = passage['text']
-
-
 
         cur_node = TextNode(text=data)
         cur_node.metadata['docid'] = docid
