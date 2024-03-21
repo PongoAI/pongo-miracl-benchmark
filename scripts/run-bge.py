@@ -8,21 +8,51 @@ import time
 import json
 from datasets import load_dataset
 import math
-from FlagEmbedding import FlagReranker
 
 
-reranker = FlagReranker('BAAI/bge-reranker-base', use_fp16=True) 
+API_URL = "used a private huggingface endpoint for this"
+
+
 
 def run_rerank(query, docs):
-    scores = reranker.compute_score([[query, doc['text']] for doc in docs])
     
-    for i in range(len(docs)):
-        docs[i]['score'] = scores[i]
-        
+    import asyncio
+    import aiohttp
+
+    scores_to_collect = [{'text': query, 'text_pair': doc['text'], 'title': doc['title']} for doc in docs]
+
+    async def get_score(score_to_collect):
+        async with aiohttp.ClientSession() as session:
+            # Initialize an empty list to hold scores for this text_pair
+            scores = []
+
+            # Split the text_pair if it's longer than 1600 characters into segments of up to 1600 characters, add title later
+            text_pair = score_to_collect['text_pair']
+            segments = [text_pair[i:i+1600] for i in range(0, len(text_pair), 1600)]
+
+            # Process each segment asynchronously
+            for segment in segments:
+                async with session.post(API_URL, json={'inputs': {'text': query, 'text_pair': score_to_collect['title']+'\n\n'+segment}}) as response:
+                    response_json = await response.json()
+                    # print(response_json)
+                    scores.append(response_json['score'])
+
+            # Return the highest score among the segments
+            return max(scores)
+
+    async def gather_scores():
+        tasks = [get_score(score_to_collect) for score_to_collect in scores_to_collect]
+        return await asyncio.gather(*tasks)
+
+    scores = asyncio.run(gather_scores())
+
+    for i, doc in enumerate(docs):
+        doc['score'] = scores[i]
     
     docs.sort(key=lambda x: x['score'], reverse=True)
 
     return docs[:10]
+
 
 
 miracl = load_dataset('miracl/miracl', 'en', use_auth_token=True)
